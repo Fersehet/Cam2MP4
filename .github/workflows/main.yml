@@ -1,0 +1,37 @@
+name: Build executables
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - firewire2mp4.py
+      - build.py
+      - .github/workflows/build.yml
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tk libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
+      # build.py installs the dependencies, bundles ffmpeg, builds and self-tests the result
+      - name: Build
+        run: python build.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FireWire2MP4-${{ runner.os }}
+          path: release/*
+          if-no-files-found: error
