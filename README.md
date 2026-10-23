@@ -47,9 +47,3 @@ The result is in `release/`. Run it on Windows for the .exe, on macOS for the .a
   (`sudo apt install dvgrab`); converting files works without it.
 
 The first start of the single-file builds takes a few seconds while the program unpacks itself.
-
-## What changed in firewire2mp4.py
-
-Only the ffmpeg lookup: the built program uses its bundled ffmpeg first, otherwise it uses `ffmpeg` from PATH
-(running the .py directly behaves as before). A `--selftest <file>` switch was added, which the build uses to
-check that the bundled ffmpeg works and has libx264 and AAC.
