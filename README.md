@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/cam2mp4-logo.png" alt="Cam2MP4 – Keep your memories alive" width="520"></p>
+
 # Cam2MP4 – standalone build
 
 ## First start
