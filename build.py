@@ -14,6 +14,7 @@ Output in the folder  release/ :
     macOS    FireWire2MP4-macos-<arch>.zip   (contains FireWire2MP4.app)
     Linux    FireWire2MP4-linux-<arch>.tar.gz
 """
+import os
 import platform
 import shutil
 import subprocess
@@ -67,6 +68,12 @@ def main():
 
     cmd = [PY, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", NAME,
            "--collect-all", "customtkinter", "--collect-all", "imageio_ffmpeg"]
+    # Window icon inside the program, plus the file icon of the .exe/.app
+    cmd += ["--add-data", f"assets/cam2mp4-icon-256.png{os.pathsep}assets"]
+    if SYSTEM == "Windows":
+        cmd += ["--icon", "assets/cam2mp4.ico"]
+    elif SYSTEM == "Darwin":
+        cmd += ["--icon", "assets/cam2mp4-icon-1024.png"]  # PyInstaller converts it to .icns via Pillow
     if SYSTEM != "Darwin":  # on macOS an .app folder is the usual way
         cmd.append("--onefile")
     run(cmd + ["firewire2mp4.py"])
