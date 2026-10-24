@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FireWire2MP4 - Camcorder (FireWire / IEEE 1394, DV oder HDV) -> MP4
-Moderne Oberfläche mit CustomTkinter (Hell-/Dunkelmodus).
+Cam2MP4 - camcorder (FireWire / IEEE 1394, DV or HDV) -> MP4
+Modern CustomTkinter interface (light/dark mode).
 
 Installation:
     pip install customtkinter pillow
-    + ffmpeg (im PATH)
-    + Linux: dvgrab (empfohlen), optional dvcont für die Bandsteuerung
+    + ffmpeg (on the PATH)
+    + Linux: dvgrab (recommended), optionally dvcont for tape control
 
 Start:
     python3 firewire2mp4.py
 
-Ohne zusätzliche Pakete läuft die schlichte Variante firewire2mp4_classic.py.
+Without extra packages, the plain variant firewire2mp4_classic.py runs.
 """
 
 import io
@@ -41,23 +41,23 @@ except ImportError:
 if _missing:
     _r = tk.Tk()
     _r.withdraw()
-    _hint = ("\n\nLinux zusätzlich:  sudo apt install python3-pil.imagetk"
+    _hint = ("\n\nOn Linux also:  sudo apt install python3-pil.imagetk"
              if platform.system() == "Linux" and "pillow" in _missing else "")
-    messagebox.showerror("Python-Paket fehlt",
-                         "Bitte zuerst installieren:\n\n    pip install " + " ".join(_missing) + _hint + "\n\n"
-                         "Alternativ: firewire2mp4_classic.py (ohne Zusatzpakete).")
+    messagebox.showerror("Python package missing",
+                         "Please install first:\n\n    pip install " + " ".join(_missing) + _hint + "\n\n"
+                         "Alternatively: firewire2mp4_classic.py (no extra packages).")
     raise SystemExit(1)
 
-SYSTEM = platform.system()  # "Windows", "Darwin" oder "Linux"
+SYSTEM = platform.system()  # "Windows", "Darwin" or "Linux"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
-MODE_CAP = "Camcorder aufnehmen"
-MODE_FILE = "Datei konvertieren"
-QUALITY = {"Hoch (CRF 18)": 18, "Gut (CRF 21)": 21, "Kompakt (CRF 24)": 24}
-PRESET = {"Wenig Rechenzeit (größere Datei)": "veryfast", "Mittel (empfohlen)": "medium", "Viel Rechenzeit (kleinere Datei)": "slow"}
-NO_AUDIO_DEV = "(im Videostream / keiner)"
-NO_DEVICE = "(kein Gerät gefunden)"
-PW, PH = 448, 252  # Größe der Vorschau (16:9)
+MODE_CAP = "Record camcorder"
+MODE_FILE = "Convert file"
+QUALITY = {"High (CRF 18)": 18, "Good (CRF 21)": 21, "Compact (CRF 24)": 24}
+PRESET = {"Fast (larger file)": "veryfast", "Medium (recommended)": "medium", "Slow (smaller file)": "slow"}
+NO_AUDIO_DEV = "(in video stream / none)"
+NO_DEVICE = "(no device found)"
+PW, PH = 448, 252  # preview size (16:9)
 PREVIEW_BG = "#121212"
 
 GREEN = ("#2e9e5b", "#2e9e5b")
@@ -73,15 +73,15 @@ def fmt_cmd(cmd):
 
 
 def find_ffmpeg():
-    """ffmpeg finden. Im fertigen Programm (PyInstaller) zuerst das mitgelieferte ffmpeg,
-    sonst das ffmpeg aus dem PATH; zuletzt das Paket imageio-ffmpeg, falls vorhanden."""
+    """Find ffmpeg. In the built program (PyInstaller) prefer the bundled ffmpeg,
+    otherwise the ffmpeg on the PATH; finally the imageio-ffmpeg package, if present."""
     def bundled():
         try:
             import imageio_ffmpeg
             exe = imageio_ffmpeg.get_ffmpeg_exe()
             if not (exe and os.path.isfile(exe)):
                 return None
-            if not os.access(exe, os.X_OK):  # entpackte Datei ausführbar machen
+            if not os.access(exe, os.X_OK):  # make the unpacked file executable
                 try:
                     os.chmod(exe, 0o755)
                 except OSError:
@@ -96,15 +96,15 @@ def find_ffmpeg():
 
 
 # --------------------------------------------------------------------------
-# Geräte-Erkennung
+# Device detection
 # --------------------------------------------------------------------------
 def parse_dshow(text):
-    """Parst: ffmpeg -list_devices true -f dshow -i dummy"""
+    """Parses: ffmpeg -list_devices true -f dshow -i dummy"""
     video, audio, section = [], [], None
     for line in text.splitlines():
         if "Alternative name" in line:
             continue
-        m = re.search(r'"(.+?)"\s+\(([a-z, ]+)\)\s*$', line)  # neues Format
+        m = re.search(r'"(.+?)"\s+\(([a-z, ]+)\)\s*$', line)  # new format
         if m:
             if "video" in m.group(2):
                 video.append(m.group(1))
@@ -116,7 +116,7 @@ def parse_dshow(text):
             section = "video"
         elif "directshow audio devices" in low:
             section = "audio"
-        else:  # altes Format
+        else:  # old format
             m = re.search(r'\]\s+"(.+?)"\s*$', line)
             if m and section:
                 (video if section == "video" else audio).append(m.group(1))
@@ -124,7 +124,7 @@ def parse_dshow(text):
 
 
 def parse_avfoundation(text):
-    """Parst: ffmpeg -f avfoundation -list_devices true -i ''"""
+    """Parses: ffmpeg -f avfoundation -list_devices true -i ''"""
     video, audio, section = [], [], None
     for line in text.splitlines():
         if "video devices" in line:
@@ -143,7 +143,7 @@ class App(ctk.CTk):
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
         super().__init__()
-        self.title("FireWire → MP4")
+        self.title("Cam2MP4")
         self.geometry("1080x840")
         self.minsize(980, 720)
 
@@ -159,13 +159,13 @@ class App(ctk.CTk):
         self.current_out = ""
         self.total_secs = None
         self.video_map, self.audio_map = {}, {}
-        self.preview_only = False      # läuft gerade nur die Live-Vorschau (ohne Datei)?
+        self.preview_only = False      # is only the live preview running (no file)?
         self.use_preview = False
-        self.preview_failed = False    # nach einem Fehler nicht endlos neu starten
-        self._after_idle = None        # Aktion, sobald der laufende Prozess beendet ist
+        self.preview_failed = False    # after an error, don't restart endlessly
+        self._after_idle = None        # action to run once the current process has ended
         self._ready = False
-        self._hold_status = False      # „Fertig …“-Meldung nicht sofort überschreiben
-        self._gen = 0                  # Laufnummer, um veraltete Meldungen zu ignorieren
+        self._hold_status = False      # don't overwrite the "Done …" message right away
+        self._gen = 0                  # run number, to ignore stale messages
         self._last_dv = None
         self._frame = None
         self._shown = None
@@ -177,8 +177,8 @@ class App(ctk.CTk):
         self.cam_format = tk.StringVar(value="DV")
         self.card = tk.StringVar()
         self.outfile = tk.StringVar(value=self._default_output())
-        self.quality = tk.StringVar(value="Gut (CRF 21)")
-        self.preset = tk.StringVar(value="Mittel (empfohlen)")
+        self.quality = tk.StringVar(value="Good (CRF 21)")
+        self.preset = tk.StringVar(value="Medium (recommended)")
         self.deint = tk.BooleanVar(value=True)
         self.square = tk.BooleanVar(value=True)
         self.stop_min = tk.StringVar(value="0")
@@ -192,7 +192,7 @@ class App(ctk.CTk):
         self.after(100, self._preview_tick)
         self.after(250, self._startup_checks)
 
-    # ---------------------------------------------------------------- Helfer
+    # --------------------------------------------------------------- Helpers
     def _default_output(self):
         base = os.path.join(os.path.expanduser("~"), "Videos")
         if not os.path.isdir(base):
@@ -203,7 +203,7 @@ class App(ctk.CTk):
         return self.mode_btn.get() == MODE_CAP
 
     def _set_theme(self, value):
-        ctk.set_appearance_mode({"Hell": "light", "Dunkel": "dark", "Auto": "system"}[value])
+        ctk.set_appearance_mode({"Light": "light", "Dark": "dark", "Auto": "system"}[value])
 
     def _card(self, parent, title):
         card = ctk.CTkFrame(parent, corner_radius=12)
@@ -224,20 +224,20 @@ class App(ctk.CTk):
         self.columnconfigure(1, weight=1)
         self.rowconfigure(1, weight=1)
 
-        # Kopfzeile
+        # Header
         head = ctk.CTkFrame(self, fg_color="transparent")
         head.grid(row=0, column=0, columnspan=2, sticky="ew", padx=22, pady=(18, 6))
         head.columnconfigure(0, weight=1)
-        ctk.CTkLabel(head, text="FireWire → MP4", anchor="w",
+        ctk.CTkLabel(head, text="Cam2MP4", anchor="w",
                      font=ctk.CTkFont(size=28, weight="bold")).grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(head, text="Camcorder-Bänder digitalisieren – direkt als MP4", anchor="w",
+        ctk.CTkLabel(head, text="Keep your memories alive – digitize camcorder tapes straight to MP4", anchor="w",
                      text_color=COL_HINT).grid(row=1, column=0, sticky="w")
-        self.theme_btn = ctk.CTkSegmentedButton(head, values=["Hell", "Dunkel", "Auto"],
+        self.theme_btn = ctk.CTkSegmentedButton(head, values=["Light", "Dark", "Auto"],
                                                 command=self._set_theme, width=180)
         self.theme_btn.set("Auto")
         self.theme_btn.grid(row=0, column=1, rowspan=2, sticky="e")
 
-        # Linke Spalte: Einstellungen
+        # Left column: settings
         left = ctk.CTkScrollableFrame(self, width=450, fg_color="transparent")
         left.grid(row=1, column=0, sticky="nsew", padx=(16, 8), pady=(0, 16))
 
@@ -246,8 +246,8 @@ class App(ctk.CTk):
         self.mode_btn.set(MODE_CAP)
         self.mode_btn.pack(fill="x", pady=(0, 6))
 
-        # Quelle
-        body = self._card(left, "Quelle")
+        # Source
+        body = self._card(left, "Source")
         body.columnconfigure(0, weight=1)
 
         self.cap_frame = ctk.CTkFrame(body, fg_color="transparent")
@@ -256,10 +256,10 @@ class App(ctk.CTk):
             self._lbl(self.cap_frame, "Format").grid(row=0, column=0, sticky="w", pady=4)
             ctk.CTkOptionMenu(self.cap_frame, variable=self.cam_format, dynamic_resizing=False,
                               command=lambda _v: self._restart_preview(),
-                              values=["DV", "HDV (experimentell)"]).grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=4)
-            self._lbl(self.cap_frame, "FireWire-Karte").grid(row=1, column=0, sticky="w", pady=4)
+                              values=["DV", "HDV (experimental)"]).grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=4)
+            self._lbl(self.cap_frame, "FireWire card").grid(row=1, column=0, sticky="w", pady=4)
             ctk.CTkEntry(self.cap_frame, textvariable=self.card, width=70).grid(row=1, column=1, sticky="w", padx=(10, 0), pady=4)
-            hint = "Karte leer lassen = automatisch. Camcorder im VCR-/Play-Modus einschalten."
+            hint = "Leave card empty = automatic. Switch the camcorder on in VCR/Play mode."
             hint_row = 2
         else:
             self._lbl(self.cap_frame, "Camcorder").grid(row=0, column=0, sticky="w", pady=4)
@@ -272,7 +272,7 @@ class App(ctk.CTk):
             self.om_audio = ctk.CTkOptionMenu(self.cap_frame, variable=self.dev_audio,
                                               dynamic_resizing=False, values=[NO_AUDIO_DEV])
             self.om_audio.grid(row=1, column=1, columnspan=2, sticky="ew", padx=(10, 0), pady=4)
-            hint = "Camcorder im VCR-/Play-Modus einschalten, dann ↻ klicken."
+            hint = "Switch the camcorder on in VCR/Play mode, then click ↻."
             hint_row = 2
         self._lbl(self.cap_frame, hint, text_color=COL_HINT, wraplength=390,
                   justify="left").grid(row=hint_row, column=0, columnspan=3, sticky="w", pady=(4, 0))
@@ -280,59 +280,59 @@ class App(ctk.CTk):
         self.file_frame = ctk.CTkFrame(body, fg_color="transparent")
         self.file_frame.columnconfigure(0, weight=1)
         ctk.CTkEntry(self.file_frame, textvariable=self.src_file).grid(row=0, column=0, sticky="ew", pady=4)
-        ctk.CTkButton(self.file_frame, text="Durchsuchen …", width=110,
+        ctk.CTkButton(self.file_frame, text="Browse …", width=110,
                       command=self._pick_src).grid(row=0, column=1, padx=(8, 0), pady=4)
         self._lbl(self.file_frame, "DV, AVI, MOV, M2T, MTS, MPG …", text_color=COL_HINT).grid(
             row=1, column=0, columnspan=2, sticky="w")
 
-        # Ausgabe
-        body = self._card(left, "Ausgabedatei (MP4)")
+        # Output
+        body = self._card(left, "Output file (MP4)")
         body.columnconfigure(0, weight=1)
         ctk.CTkEntry(body, textvariable=self.outfile).grid(row=0, column=0, sticky="ew", pady=4)
-        ctk.CTkButton(body, text="Ändern …", width=90, command=self._pick_out).grid(row=0, column=1, padx=(8, 0), pady=4)
+        ctk.CTkButton(body, text="Change …", width=90, command=self._pick_out).grid(row=0, column=1, padx=(8, 0), pady=4)
 
-        # Qualität
-        body = self._card(left, "Qualität & Optionen")
+        # Quality
+        body = self._card(left, "Quality & options")
         body.columnconfigure(1, weight=1)
-        self._lbl(body, "Qualität").grid(row=0, column=0, sticky="w", pady=4)
+        self._lbl(body, "Quality").grid(row=0, column=0, sticky="w", pady=4)
         ctk.CTkOptionMenu(body, variable=self.quality, values=list(QUALITY),
                           dynamic_resizing=False).grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=4)
-        self._lbl(body, "Kodier-Aufwand").grid(row=1, column=0, sticky="w", pady=4)
+        self._lbl(body, "Encoding speed").grid(row=1, column=0, sticky="w", pady=4)
         ctk.CTkOptionMenu(body, variable=self.preset, values=list(PRESET),
                           dynamic_resizing=False).grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=4)
-        ctk.CTkSwitch(body, text="Zeilensprung entfernen (Deinterlacing)",
+        ctk.CTkSwitch(body, text="Remove interlacing (deinterlace)",
                       variable=self.deint).grid(row=2, column=0, columnspan=2, sticky="w", pady=(10, 4))
-        ctk.CTkSwitch(body, text="Quadratische Pixel (korrektes 4:3 / 16:9)",
+        ctk.CTkSwitch(body, text="Square pixels (correct 4:3 / 16:9)",
                       variable=self.square).grid(row=3, column=0, columnspan=2, sticky="w", pady=4)
-        self._lbl(body, "Auto-Stopp (Min.)").grid(row=4, column=0, sticky="w", pady=(10, 4))
+        self._lbl(body, "Auto stop (min)").grid(row=4, column=0, sticky="w", pady=(10, 4))
         ctk.CTkEntry(body, textvariable=self.stop_min, width=70).grid(row=4, column=1, sticky="w", padx=(10, 0), pady=(10, 4))
-        self._lbl(body, "Erweitert").grid(row=5, column=0, sticky="w", pady=4)
+        self._lbl(body, "Advanced").grid(row=5, column=0, sticky="w", pady=4)
         ctk.CTkEntry(body, textvariable=self.extra).grid(row=5, column=1, sticky="ew", padx=(10, 0), pady=4)
-        self._lbl(body, "Auto-Stopp 0 = aus · „Erweitert“ = zusätzliche ffmpeg-Eingabe-Optionen",
+        self._lbl(body, "Auto stop 0 = off · \"Advanced\" = extra ffmpeg input options",
                   text_color=COL_HINT, wraplength=390, justify="left").grid(row=6, column=0, columnspan=2, sticky="w")
 
-        # Rechte Spalte: Vorschau, Status, Steuerung, Protokoll
+        # Right column: preview, status, controls, log
         right = ctk.CTkFrame(self, fg_color="transparent")
         right.grid(row=1, column=1, sticky="nsew", padx=(8, 22), pady=(0, 16))
         right.columnconfigure(0, weight=1)
         right.rowconfigure(4, weight=1)
         bold14 = ctk.CTkFont(size=14, weight="bold")
 
-        # Vorschau
+        # Preview
         pv = ctk.CTkFrame(right, corner_radius=12)
         pv.grid(row=0, column=0, sticky="ew", pady=6)
         ph = ctk.CTkFrame(pv, fg_color="transparent")
         ph.pack(fill="x", padx=16, pady=(10, 6))
         ph.columnconfigure(0, weight=1)
-        ctk.CTkLabel(ph, text="Live-Vorschau", anchor="w", font=bold14).grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(ph, text="Live preview", anchor="w", font=bold14).grid(row=0, column=0, sticky="w")
         ctk.CTkButton(ph, text="↻", width=30, height=26, command=self._refresh_preview).grid(
             row=0, column=1, sticky="e", padx=(0, 8))
         ctk.CTkSwitch(ph, text="", variable=self.show_preview, width=46,
                       command=self._restart_preview).grid(row=0, column=2, sticky="e")
-        # Einfaches tk.Label + wiederverwendetes PhotoImage: deutlich flüssiger als CTkImage pro Bild
+        # Plain tk.Label + reused PhotoImage: much smoother than one CTkImage per frame
         self._blank_ph = ImageTk.PhotoImage(Image.new("RGB", (PW, PH), (18, 18, 18)))
         self._video_ph = ImageTk.PhotoImage(Image.new("RGB", (PW, PH), (18, 18, 18)))
-        self.lbl_prev = tk.Label(pv, image=self._blank_ph, text="Keine Vorschau", compound="center",
+        self.lbl_prev = tk.Label(pv, image=self._blank_ph, text="No preview", compound="center",
                                  bg=PREVIEW_BG, fg="#9a9a9a", bd=0, highlightthickness=0)
         self.lbl_prev.pack(pady=(0, 14))
 
@@ -346,44 +346,44 @@ class App(ctk.CTk):
         self.pb = ctk.CTkProgressBar(sc)
         self.pb.set(0)
         self.pb.pack(fill="x", padx=24, pady=(8, 6))
-        self.lbl_status = ctk.CTkLabel(sc, text="Bereit.", text_color=COL_INFO, wraplength=440)
+        self.lbl_status = ctk.CTkLabel(sc, text="Ready.", text_color=COL_INFO, wraplength=440)
         self.lbl_status.pack(pady=(0, 12), padx=16)
 
-        # Start / Stopp
+        # Start / stop
         bar = ctk.CTkFrame(right, fg_color="transparent")
         bar.grid(row=2, column=0, sticky="ew", pady=6)
         bar.columnconfigure((0, 1), weight=1, uniform="b")
         self.btn_start = ctk.CTkButton(bar, text="", height=44, fg_color=GREEN, hover_color="#247a46",
                                        font=ctk.CTkFont(size=15, weight="bold"), command=self.start)
         self.btn_start.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        self.btn_stop = ctk.CTkButton(bar, text="■  Stopp", height=44, fg_color=RED, hover_color="#a03232",
+        self.btn_stop = ctk.CTkButton(bar, text="■  Stop", height=44, fg_color=RED, hover_color="#a03232",
                                       font=ctk.CTkFont(size=15, weight="bold"), state="disabled", command=self.stop)
         self.btn_stop.grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
-        # Zusatz-Knöpfe
+        # Extra buttons
         extras = ctk.CTkFrame(right, fg_color="transparent")
         extras.grid(row=3, column=0, sticky="ew")
-        self.btn_folder = ctk.CTkButton(extras, text="Ordner öffnen", width=110, state="disabled",
+        self.btn_folder = ctk.CTkButton(extras, text="Open folder", width=110, state="disabled",
                                         fg_color="transparent", border_width=1,
                                         text_color=("gray10", "gray90"), command=self.open_folder)
         self.btn_folder.pack(side="left")
         if self.dvcont:
             for label, cmd in (("■", "stop"), ("▶", "play"), ("◀◀", "rewind")):
                 ctk.CTkButton(extras, text=label, width=44, command=lambda c=cmd: self.tape(c)).pack(side="right", padx=2)
-            ctk.CTkLabel(extras, text="Band:", text_color=COL_HINT).pack(side="right", padx=(0, 6))
+            ctk.CTkLabel(extras, text="Tape:", text_color=COL_HINT).pack(side="right", padx=(0, 6))
 
-        # Protokoll
+        # Log
         lg = ctk.CTkFrame(right, corner_radius=12)
         lg.grid(row=4, column=0, sticky="nsew", pady=(6, 0))
         lg.columnconfigure(0, weight=1)
         lg.rowconfigure(1, weight=1)
-        ctk.CTkLabel(lg, text="Protokoll", anchor="w", font=bold14).grid(
+        ctk.CTkLabel(lg, text="Log", anchor="w", font=bold14).grid(
             row=0, column=0, sticky="w", padx=16, pady=(10, 2))
         self.txt = ctk.CTkTextbox(lg, wrap="word", height=80, font=ctk.CTkFont(family="Courier", size=12))
         self.txt.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
         self.txt.configure(state="disabled")
 
-    # ------------------------------------------------------- Status & Dialoge
+    # ------------------------------------------------------- Status & dialogs
     def _log(self, msg):
         self.txt.configure(state="normal")
         self.txt.insert("end", msg.rstrip() + "\n")
@@ -405,24 +405,24 @@ class App(ctk.CTk):
         self.pb.set(value)
 
     def _update_buttons(self):
-        busy = self.running and not self.preview_only   # Aufnahme/Konvertierung läuft
-        pending = self._after_idle is not None          # Kamera wird gerade übergeben
+        busy = self.running and not self.preview_only   # recording/conversion running
+        pending = self._after_idle is not None          # camera is being handed over
         self.btn_start.configure(state="disabled" if (busy or pending) else "normal")
         self.btn_stop.configure(state="normal" if busy else "disabled")
 
-    def _show_placeholder(self, text="Keine Vorschau"):
+    def _show_placeholder(self, text="No preview"):
         self._video_on = False
         self.lbl_prev.configure(image=self._blank_ph, text=text)
 
     def _idle_text(self):
         if not self._is_capture():
-            return "Vorschau erscheint während der Konvertierung"
+            return "Preview appears during conversion"
         if not self.show_preview.get():
-            return "Vorschau ist ausgeschaltet"
-        return "Keine Vorschau"
+            return "Preview is turned off"
+        return "No preview"
 
     def _preview_tick(self):
-        """Zeichnet das jeweils neueste Vorschaubild (bis zu ~60x pro Sekunde geprüft)."""
+        """Draws the newest preview frame (checked up to ~60 times per second)."""
         data = self._frame
         if data is not None and data is not self._shown and self.running:
             self._shown = data
@@ -431,18 +431,18 @@ class App(ctk.CTk):
                 img.load()
                 if img.size != (PW, PH):
                     img = img.resize((PW, PH))
-                self._video_ph.paste(img)  # gleiches Bildobjekt wiederverwenden → kein Flackern
+                self._video_ph.paste(img)  # reuse the same image object → no flicker
                 if not self._video_on:
                     self._video_on = True
                     self.lbl_prev.configure(image=self._video_ph, text="")
                     if self.preview_only and not self._hold_status:
-                        self._set_status("Vorschau läuft – bereit zur Aufnahme.")
+                        self._set_status("Preview running – ready to record.")
             except Exception:  # noqa: BLE001
                 pass
         self.after(15, self._preview_tick)
 
     def _pump_preview(self, stream, gen):
-        """Liest MJPEG-Bilder aus ffmpegs stdout; behält nur das neueste Bild."""
+        """Reads MJPEG frames from ffmpeg's stdout; keeps only the newest frame."""
         buf = b""
         try:
             while True:
@@ -466,7 +466,7 @@ class App(ctk.CTk):
                     buf = b""
         except Exception:  # noqa: BLE001
             pass
-        try:  # Pipe leer lesen, damit ffmpeg nie blockiert
+        try:  # drain the pipe so ffmpeg never blocks
             while stream.read(65536):
                 pass
         except Exception:  # noqa: BLE001
@@ -476,26 +476,26 @@ class App(ctk.CTk):
         if self._is_capture():
             self.file_frame.grid_remove()
             self.cap_frame.grid(row=0, column=0, sticky="ew")
-            self.btn_start.configure(text="●  Aufnahme starten")
+            self.btn_start.configure(text="●  Start recording")
         else:
             self.cap_frame.grid_remove()
             self.file_frame.grid(row=0, column=0, sticky="ew")
-            self.btn_start.configure(text="▶  Konvertierung starten")
+            self.btn_start.configure(text="▶  Start conversion")
         self._update_buttons()
         self._restart_preview()
 
     def _pick_src(self):
-        p = filedialog.askopenfilename(title="Eingabedatei wählen", filetypes=[
-            ("Videodateien", "*.dv *.avi *.mov *.m2t *.mts *.m2ts *.ts *.mpg *.mkv *.mp4"), ("Alle Dateien", "*.*")])
+        p = filedialog.askopenfilename(title="Choose input file", filetypes=[
+            ("Video files", "*.dv *.avi *.mov *.m2t *.mts *.m2ts *.ts *.mpg *.mkv *.mp4"), ("All files", "*.*")])
         if p:
             self.src_file.set(p)
             if os.path.basename(self.outfile.get()).startswith("Camcorder_"):
                 self.outfile.set(os.path.splitext(p)[0] + ".mp4")
 
     def _pick_out(self):
-        p = filedialog.asksaveasfilename(title="MP4 speichern unter", defaultextension=".mp4",
+        p = filedialog.asksaveasfilename(title="Save MP4 as", defaultextension=".mp4",
                                          initialfile=os.path.basename(self.outfile.get()),
-                                         filetypes=[("MP4-Video", "*.mp4")])
+                                         filetypes=[("MP4 video", "*.mp4")])
         if p:
             self.outfile.set(p)
 
@@ -509,13 +509,13 @@ class App(ctk.CTk):
             else:
                 subprocess.Popen(["xdg-open", folder])
         except Exception as e:  # noqa: BLE001
-            self._log(f"Ordner konnte nicht geöffnet werden: {e}")
+            self._log(f"Could not open folder: {e}")
 
-    # ---------------------------------------------------------------- Geräte
+    # --------------------------------------------------------------- Devices
     def _startup_checks(self):
         if not self.ffmpeg:
-            self._set_status("ffmpeg nicht gefunden – siehe Protokoll.", "err")
-            self._log("FEHLER: ffmpeg wurde nicht gefunden. Installation:\n"
+            self._set_status("ffmpeg not found – see log.", "err")
+            self._log("ERROR: ffmpeg was not found. Installation:\n"
                       "  Windows: winget install ffmpeg\n"
                       "  macOS:   brew install ffmpeg\n"
                       "  Linux:   sudo apt install ffmpeg dvgrab")
@@ -526,14 +526,14 @@ class App(ctk.CTk):
             if self.dvgrab:
                 self._log(f"dvgrab: {self.dvgrab}")
             else:
-                self._log("Hinweis: dvgrab fehlt (sudo apt install dvgrab). "
-                          "Ersatzweise wird ffmpegs iec61883-Eingang versucht.")
+                self._log("Note: dvgrab is missing (sudo apt install dvgrab). "
+                          "Falling back to ffmpeg's iec61883 input.")
             self._sync_preview()
         else:
-            self.refresh_devices()  # startet danach automatisch die Vorschau
+            self.refresh_devices()  # then starts the preview automatically
 
     def _refresh_preview(self):
-        """↻ in der Vorschau: Geräte neu suchen (Windows/macOS) und Vorschau neu starten."""
+        """↻ in the preview: rescan devices (Windows/macOS) and restart the preview."""
         if SYSTEM == "Linux":
             self._restart_preview()
         else:
@@ -550,7 +550,7 @@ class App(ctk.CTk):
             r = subprocess.run(cmd, capture_output=True, text=True, errors="replace",
                                timeout=20, creationflags=NO_WINDOW)
         except Exception as e:  # noqa: BLE001
-            self._log(f"Geräteliste fehlgeschlagen: {e}")
+            self._log(f"Device list failed: {e}")
             return
         text = r.stderr + r.stdout
         if SYSTEM == "Windows":
@@ -570,13 +570,13 @@ class App(ctk.CTk):
                 self.dev_video.set(pick)
         else:
             self.dev_video.set(NO_DEVICE)
-        self._log(f"{len(self.video_map)} Video- und {len(self.audio_map)} Audio-Geräte gefunden.")
+        self._log(f"Found {len(self.video_map)} video and {len(self.audio_map)} audio devices.")
         if not self.video_map:
-            self._log("Kein Camcorder erkannt. Kamera im VCR-/Play-Modus einschalten, "
-                      "Kabel prüfen und ↻ klicken.")
+            self._log("No camcorder detected. Switch the camera on in VCR/Play mode, "
+                      "check the cable and click ↻.")
         self._restart_preview()
 
-    # --------------------------------------------------------- Kommando bauen
+    # ------------------------------------------------------- Build commands
     def _minutes(self):
         try:
             return max(0, int(self.stop_min.get().strip() or 0))
@@ -603,8 +603,8 @@ class App(ctk.CTk):
         return []
 
     def _preview_args(self):
-        """Zweiter ffmpeg-Ausgang: kleine MJPEG-Bilder über stdout (nur Vorschau).
-        Camcorder: volle Bildrate (25/30 fps) für flüssiges Bild. Datei: 8 fps genügen."""
+        """Second ffmpeg output: small MJPEG frames via stdout (preview only).
+        Camcorder: full frame rate (25/30 fps) for smooth video. File: 8 fps is enough."""
         vf = [] if self._is_capture() else ["fps=8"]
         if self.deint.get():
             vf.append("yadif=0:-1:0")
@@ -615,9 +615,9 @@ class App(ctk.CTk):
                 "-strict", "unofficial", "-flush_packets", "1", "-f", "image2pipe"]
 
     def _build_commands(self, out, preview_only=False):
-        """Liefert (dvgrab-Befehl oder None, ffmpeg-Befehl, Vorschau an?)."""
+        """Returns (dvgrab command or None, ffmpeg command, preview on?)."""
         ff = [self.ffmpeg, "-hide_banner", "-y"]
-        if preview_only:  # Live-Vorschau: nur Fehler melden, möglichst wenig puffern
+        if preview_only:  # live preview: report errors only, buffer as little as possible
             ff += ["-loglevel", "error", "-nostats", "-fflags", "nobuffer", "-flags", "low_delay"]
         extra = shlex.split(self.extra.get(), posix=(SYSTEM != "Windows"))
         limit = [] if preview_only else self._limit_args()
@@ -632,7 +632,7 @@ class App(ctk.CTk):
         if not self._is_capture():
             src = self.src_file.get().strip()
             if not os.path.isfile(src):
-                raise ValueError("Bitte eine vorhandene Eingabedatei auswählen.")
+                raise ValueError("Please choose an existing input file.")
             return None, ff + extra + ["-i", src] + outs, use_preview
 
         if SYSTEM == "Linux":
@@ -648,8 +648,8 @@ class App(ctk.CTk):
 
         v = self.video_map.get(self.dev_video.get())
         if not v:
-            raise ValueError("Kein Camcorder gefunden. Einschalten (VCR-Modus) und ↻ klicken.")
-        # Für die reine Vorschau wird kein Audiogerät geöffnet
+            raise ValueError("No camcorder found. Switch it on (VCR mode) and click ↻.")
+        # the preview alone does not open an audio device
         a = None if preview_only else self.audio_map.get(self.dev_audio.get())
         if SYSTEM == "Windows":
             spec = f"video={v}" + (f":audio={a}" if a else "")
@@ -658,13 +658,13 @@ class App(ctk.CTk):
         spec = f"{v}:{a if a else 'none'}"
         return None, ff + ["-f", "avfoundation"] + extra + ["-i", spec] + outs, use_preview
 
-    # ------------------------------------------------------------ Live-Vorschau
+    # ------------------------------------------------------------ Live preview
     def _want_preview(self):
         return bool(self._ready and self.ffmpeg and self._is_capture()
                     and self.show_preview.get() and not self.preview_failed)
 
     def _sync_preview(self):
-        """Startet bzw. beendet die Live-Vorschau, je nachdem ob sie gerade gewünscht ist."""
+        """Starts or stops the live preview, depending on whether it is currently wanted."""
         if self._after_idle is not None:
             return
         if self.running:
@@ -677,7 +677,7 @@ class App(ctk.CTk):
             self._show_placeholder(self._idle_text())
 
     def _restart_preview(self, *_):
-        """Nach Geräte-/Einstellungswechsel: Vorschau neu aufbauen (Fehlerstatus zurücksetzen)."""
+        """After a device/setting change: rebuild the preview (reset the error state)."""
         self.preview_failed = False
         if self.running and self.preview_only:
             if self._after_idle is None:
@@ -691,13 +691,13 @@ class App(ctk.CTk):
             dv_cmd, ff_cmd, _ = self._build_commands(None, preview_only=True)
         except ValueError as e:
             self._hold_status = False
-            self._show_placeholder("Kein Camcorder gefunden")
+            self._show_placeholder("No camcorder found")
             self._set_status(str(e))
             return
         self._begin(None, dv_cmd, ff_cmd, True, preview_only=True)
 
     def _kill_current(self):
-        """Beendet den laufenden Prozess sofort (Vorschau: keine Datei abzuschließen)."""
+        """Ends the running process immediately (preview: no file to finalize)."""
         self.stopping = True
         for p in (self.dv, self.ff):
             try:
@@ -706,37 +706,37 @@ class App(ctk.CTk):
             except Exception:  # noqa: BLE001
                 pass
 
-    # ----------------------------------------------------------- Start / Stopp
+    # ------------------------------------------------------------ Start / stop
     def start(self):
         if (self.running and not self.preview_only) or self._after_idle is not None:
             return
         if not self.ffmpeg:
-            messagebox.showerror("ffmpeg fehlt", "ffmpeg wurde nicht gefunden. Bitte installieren (siehe Protokoll).")
+            messagebox.showerror("ffmpeg missing", "ffmpeg was not found. Please install it (see log).")
             return
         out = self.outfile.get().strip()
         if not out:
-            messagebox.showerror("Ausgabedatei", "Bitte eine Ausgabedatei angeben.")
+            messagebox.showerror("Output file", "Please specify an output file.")
             return
         if not out.lower().endswith(".mp4"):
             out += ".mp4"
             self.outfile.set(out)
-        if os.path.exists(out) and not messagebox.askyesno("Datei existiert", f"{out}\nüberschreiben?"):
+        if os.path.exists(out) and not messagebox.askyesno("File exists", f"Overwrite\n{out}?"):
             return
         try:
             os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
             dv_cmd, ff_cmd, use_preview = self._build_commands(out)
         except Exception as e:  # noqa: BLE001
-            messagebox.showerror("Fehler", str(e))
+            messagebox.showerror("Error", str(e))
             return
 
         def job():
             self._begin(out, dv_cmd, ff_cmd, use_preview, preview_only=False)
 
         if self.running:
-            # Die Kamera kann nur von einem Prozess geöffnet werden:
-            # Vorschau beenden, danach startet die Aufnahme automatisch.
+            # The camera can only be opened by one process:
+            # stop the preview, then the recording starts automatically.
             self._after_idle = job
-            self._set_status("Übergebe Kamera an die Aufnahme …")
+            self._set_status("Handing camera over to recording …")
             self._update_buttons()
             self._kill_current()
         else:
@@ -752,22 +752,22 @@ class App(ctk.CTk):
         self._frame = self._shown = None
         self._last_dv = None
         if preview_only:
-            self._show_placeholder("Warte auf Bild …\n\nCamcorder einschalten (VCR-Modus) und „Play“ drücken")
+            self._show_placeholder("Waiting for picture …\n\nSwitch the camcorder on (VCR mode) and press Play")
             if not self._hold_status:
-                self._set_status("Vorschau startet …")
+                self._set_status("Starting preview …")
         else:
             self._hold_status = False
             if not use_preview:
-                self._show_placeholder("Vorschau ist ausgeschaltet")
-            # sonst bleibt das letzte Vorschaubild stehen, bis neue Bilder kommen
+                self._show_placeholder("Preview is turned off")
+            # otherwise the last preview frame stays until new frames arrive
             self.btn_folder.configure(state="disabled")
             self.lbl_timer.configure(text="00:00:00")
             self.lbl_size.configure(text=" ")
-            self._set_status("Starte …")
+            self._set_status("Starting …")
             self._pb_indeterminate()
             if self._is_capture():
-                self._log("Aufnahme gestartet – Band am Camcorder abspielen (Play), "
-                          "falls es nicht automatisch startet.")
+                self._log("Recording started – play the tape on the camcorder (Play) "
+                          "if it doesn't start automatically.")
         self._update_buttons()
         threading.Thread(target=self._run, args=(dv_cmd, ff_cmd, use_preview, self._gen), daemon=True).start()
 
@@ -806,7 +806,7 @@ class App(ctk.CTk):
             self.ff = ff
             if dv:
                 dv.stdout.close()
-            if self.stopping and self.preview_only:  # Abbruch kam, bevor die Prozesse liefen
+            if self.stopping and self.preview_only:  # cancel arrived before the processes were running
                 self._kill_current()
             if use_preview:
                 threading.Thread(target=self._pump_preview, args=(ff.stdout, gen), daemon=True).start()
@@ -816,25 +816,25 @@ class App(ctk.CTk):
             t.join(timeout=2)
             if dv and dv.poll() is None:
                 dv.terminate()
-            if dv:  # Kamera wirklich freigeben, bevor es weitergeht
+            if dv:  # really release the camera before continuing
                 try:
                     dv.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     dv.kill()
         except FileNotFoundError as e:
-            self.q.put(("log", f"Programm nicht gefunden: {e}"))
+            self.q.put(("log", f"Program not found: {e}"))
         except Exception as e:  # noqa: BLE001
-            self.q.put(("log", f"Fehler: {e}"))
+            self.q.put(("log", f"Error: {e}"))
         self.q.put(("done", (gen, rc)))
 
     def stop(self):
         if not self.running:
             return
         self.stopping = True
-        self._set_status("Beende und schließe MP4-Datei ab …")
+        self._set_status("Stopping and finalizing MP4 file …")
         try:
             if self.dv and self.dv.poll() is None:
-                self.dv.terminate()  # ffmpeg erhält EOF und finalisiert die Datei
+                self.dv.terminate()  # ffmpeg gets EOF and finalizes the file
             elif self.ff and self.ff.poll() is None:
                 self.ff.stdin.write(b"q")
                 self.ff.stdin.flush()
@@ -853,10 +853,10 @@ class App(ctk.CTk):
                 r = subprocess.run([self.dvcont, command], capture_output=True, text=True, timeout=15)
                 self.q.put(("log", f"dvcont {command}: " + (r.stdout + r.stderr).strip()))
             except Exception as e:  # noqa: BLE001
-                self.q.put(("log", f"dvcont {command} fehlgeschlagen: {e}"))
+                self.q.put(("log", f"dvcont {command} failed: {e}"))
         threading.Thread(target=work, daemon=True).start()
 
-    # ------------------------------------------------------- Ereignisschleife
+    # ------------------------------------------------------------ Event loop
     def _poll(self):
         try:
             while True:
@@ -864,7 +864,7 @@ class App(ctk.CTk):
                 if kind == "log":
                     self._log(data)
                 elif kind == "dv":
-                    # Fortschrittszeilen von dvgrab nicht ins Protokoll schreiben
+                    # don't write dvgrab's progress lines to the log
                     if "timecode" not in data and data != self._last_dv:
                         self._last_dv = data
                         self._log("[dvgrab] " + data)
@@ -884,16 +884,16 @@ class App(ctk.CTk):
             self.lbl_timer.configure(text=f"{h:02d}:{mi:02d}:{int(s_):02d}")
             sz = re.search(r"size=\s*(\S+)", line)
             if sz and sz.group(1) != "N/A" and not self.preview_only:
-                self.lbl_size.configure(text=f"Dateigröße: {sz.group(1)}")
+                self.lbl_size.configure(text=f"File size: {sz.group(1)}")
             if not self.stopping:
                 if self.preview_only:
                     pass
                 elif self.total_secs:
                     frac = min(1.0, secs / self.total_secs)
                     self.pb.set(frac)
-                    self._set_status(f"Konvertiere … {frac * 100:.0f} %")
+                    self._set_status(f"Converting … {frac * 100:.0f} %")
                 else:
-                    self._set_status("Nimmt auf …" if self._is_capture() else "Konvertiere …")
+                    self._set_status("Recording …" if self._is_capture() else "Converting …")
             return
         d = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", line)
         if d and not self._is_capture() and self.total_secs is None:
@@ -905,7 +905,7 @@ class App(ctk.CTk):
 
     def _finished(self, gen, rc):
         if gen != self._gen:
-            return  # Meldung eines älteren Laufs
+            return  # message from an older run
         was_preview = self.preview_only
         self.running = False
         self.preview_only = False
@@ -914,7 +914,7 @@ class App(ctk.CTk):
         cb, self._after_idle = self._after_idle, None
 
         if was_preview:
-            if cb:  # Kamera wird an die Aufnahme übergeben bzw. Vorschau neu gestartet
+            if cb:  # camera is handed to the recording, or the preview restarts
                 self._update_buttons()
                 cb()
                 return
@@ -922,12 +922,12 @@ class App(ctk.CTk):
             if self.stopping:
                 self._show_placeholder(self._idle_text())
             else:
-                # Vorschau hat von selbst aufgehört → nicht endlos neu starten
+                # preview stopped by itself → don't restart endlessly
                 self.preview_failed = True
                 self._hold_status = False
-                self._show_placeholder("Kein Bild vom Camcorder")
-                self._set_status("Keine Vorschau – Camcorder einschalten (VCR-Modus) und ↻ klicken.")
-                self._log("Vorschau beendet: kein Signal vom Camcorder. Tipps: VCR-Modus? Kabel/Treiber ok?")
+                self._show_placeholder("No picture from camcorder")
+                self._set_status("No preview – switch the camcorder on (VCR mode) and click ↻.")
+                self._log("Preview ended: no signal from camcorder. Tips: VCR mode? Cable/driver OK?")
             return
 
         self._update_buttons()
@@ -937,20 +937,20 @@ class App(ctk.CTk):
         if have_file and (rc == 0 or self.stopping):
             mb = os.path.getsize(self.current_out) / 1e6
             self._pb_determinate(1)
-            self._set_status(f"Fertig: {os.path.basename(self.current_out)} ({mb:.1f} MB)", "ok")
-            self._log(f"Fertig: {self.current_out} ({mb:.1f} MB)")
+            self._set_status(f"Done: {os.path.basename(self.current_out)} ({mb:.1f} MB)", "ok")
+            self._log(f"Done: {self.current_out} ({mb:.1f} MB)")
             self.btn_folder.configure(state="normal")
             self.outfile.set(self._default_output())
         else:
             self._pb_determinate(0)
-            self._set_status(f"Fehlgeschlagen (Code {rc}) – Details im Protokoll.", "err")
-            self._log("Es wurde keine gültige MP4-Datei erzeugt. Tipps: Camcorder im VCR-Modus? "
-                      "Kabel/Treiber ok? Eventuell zusätzliche Eingabe-Optionen nötig.")
-        self._sync_preview()  # Live-Vorschau wieder aufnehmen
+            self._set_status(f"Failed (code {rc}) – details in the log.", "err")
+            self._log("No valid MP4 file was created. Tips: camcorder in VCR mode? "
+                      "Cable/driver OK? Extra input options may be needed.")
+        self._sync_preview()  # resume the live preview
 
     def _on_close(self):
         if self.running and not self.preview_only:
-            if not messagebox.askyesno("Beenden", "Es läuft noch eine Aufnahme/Konvertierung. Wirklich beenden?"):
+            if not messagebox.askyesno("Quit", "A recording/conversion is still running. Really quit?"):
                 return
         for p in (self.dv, self.ff):
             try:
@@ -962,8 +962,8 @@ class App(ctk.CTk):
 
 
 def selftest(result_path):
-    """Prüft ohne Fenster, ob ein brauchbares ffmpeg (mit libx264 und AAC) gefunden wird.
-    Aufruf:  FireWire2MP4 --selftest ergebnis.txt   (wird vom Build-Skript benutzt)"""
+    """Checks without a window whether a usable ffmpeg (with libx264 and AAC) is found.
+    Usage:  FireWire2MP4 --selftest result.txt   (used by the build script)"""
     lines, ok = [], False
     exe = find_ffmpeg()
     lines.append(f"ffmpeg: {exe}")
@@ -976,7 +976,7 @@ def selftest(result_path):
             lines.append(f"libx264: {has_x264}, aac: {has_aac}")
             ok = has_x264 and has_aac
         except Exception as e:  # noqa: BLE001
-            lines.append(f"Fehler: {e}")
+            lines.append(f"Error: {e}")
     lines.append("SELFTEST OK" if ok else "SELFTEST FAILED")
     with open(result_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
