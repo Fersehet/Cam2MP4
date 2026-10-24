@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Baut FireWire2MP4 als eigenständiges Programm (ffmpeg ist eingebaut).
+Builds FireWire2MP4 as a standalone program (ffmpeg is bundled).
 
     python build.py
 
-Nur zum BAUEN wird Python 3.10+ mit tkinter gebraucht. Das fertige Programm braucht nichts.
-PyInstaller kann nicht für andere Systeme bauen: Windows-Programm unter Windows bauen,
-macOS-Programm unter macOS, Linux-Programm unter Linux (oder alles per GitHub Actions).
+Only BUILDING needs Python 3.10+ with tkinter. The finished program needs nothing.
+PyInstaller cannot cross-compile: build the Windows program on Windows,
+the macOS program on macOS, the Linux program on Linux (or all of them via GitHub Actions).
 
-Ergebnis im Ordner  release/ :
+Output in the folder  release/ :
     Windows  FireWire2MP4.exe
-    macOS    FireWire2MP4-macos-<arch>.zip   (enthält FireWire2MP4.app)
+    macOS    FireWire2MP4-macos-<arch>.zip   (contains FireWire2MP4.app)
     Linux    FireWire2MP4-linux-<arch>.tar.gz
 """
 import platform
@@ -37,26 +37,26 @@ def run(cmd, **kw):
 
 
 def selftest(exe):
-    """Startet das fertige Programm im Testmodus: findet es sein eingebautes ffmpeg samt libx264/AAC?"""
+    """Runs the finished program in test mode: does it find its bundled ffmpeg with libx264/AAC?"""
     with tempfile.TemporaryDirectory() as tmp:
         result = Path(tmp) / "selftest.txt"
         print(f"+ {exe} --selftest", flush=True)
         subprocess.run([str(exe), "--selftest", str(result)], check=False, timeout=300)
-        text = result.read_text(encoding="utf-8") if result.exists() else "(keine Ausgabe)"
+        text = result.read_text(encoding="utf-8") if result.exists() else "(no output)"
     print(text)
     if "SELFTEST OK" not in text:
-        sys.exit("FEHLER: Selbsttest des gebauten Programms fehlgeschlagen.")
+        sys.exit("ERROR: self-test of the built program failed.")
 
 
 def main():
     try:
         import tkinter  # noqa: F401
     except ImportError:
-        sys.exit("tkinter fehlt in diesem Python. Windows/macOS: Python von python.org installieren. "
+        sys.exit("tkinter is missing in this Python. Windows/macOS: install Python from python.org. "
                  "Linux: sudo apt install python3-tk")
 
     if not PY.exists():
-        print("Erzeuge Build-Umgebung ...", flush=True)
+        print("Creating build environment ...", flush=True)
         venv.EnvBuilder(with_pip=True).create(ENV)
     run([PY, "-m", "pip", "install", "--upgrade", "pip"])
     run([PY, "-m", "pip", "install", *PACKAGES])
@@ -67,7 +67,7 @@ def main():
 
     cmd = [PY, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", NAME,
            "--collect-all", "customtkinter", "--collect-all", "imageio_ffmpeg"]
-    if SYSTEM != "Darwin":  # unter macOS ist ein .app-Ordner der übliche Weg
+    if SYSTEM != "Darwin":  # on macOS an .app folder is the usual way
         cmd.append("--onefile")
     run(cmd + ["firewire2mp4.py"])
 
@@ -80,11 +80,11 @@ def main():
     elif SYSTEM == "Darwin":
         app = dist / f"{NAME}.app"
         plist = app / "Contents" / "Info.plist"
-        # Ohne diese Texte darf macOS dem Programm den Zugriff auf Kamera/Mikrofon nicht erlauben
-        for key, text in (("NSCameraUsageDescription", "FireWire2MP4 liest das Videosignal des Camcorders."),
-                          ("NSMicrophoneUsageDescription", "FireWire2MP4 liest den Ton des Camcorders.")):
+        # Without these texts macOS cannot grant the program camera/microphone access
+        for key, text in (("NSCameraUsageDescription", "FireWire2MP4 reads the video signal from the camcorder."),
+                          ("NSMicrophoneUsageDescription", "FireWire2MP4 reads the audio from the camcorder.")):
             run(["plutil", "-replace", key, "-string", text, plist])
-        run(["codesign", "--force", "--deep", "--sign", "-", app])  # Ad-hoc-Signatur nach der Änderung
+        run(["codesign", "--force", "--deep", "--sign", "-", app])  # ad-hoc signature after the change
         selftest(app / "Contents" / "MacOS" / NAME)
         run(["ditto", "-c", "-k", "--keepParent", app, HERE / "release" / f"{NAME}-macos-{ARCH}.zip"])
 
@@ -93,7 +93,7 @@ def main():
         selftest(exe)
         run(["tar", "-czf", HERE / "release" / f"{NAME}-linux-{ARCH}.tar.gz", "-C", dist, NAME])
 
-    print("\nFertig. Ergebnis:")
+    print("\nDone. Output:")
     for p in sorted((HERE / "release").iterdir()):
         print(f"  {p}  ({p.stat().st_size / 1e6:.0f} MB)")
 
