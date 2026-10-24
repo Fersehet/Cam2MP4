@@ -28,6 +28,7 @@ import threading
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox
+from tkinter import font as tkfont
 
 _missing = []
 try:
@@ -60,12 +61,59 @@ NO_DEVICE = "(no device found)"
 PW, PH = 448, 252  # preview size (16:9)
 PREVIEW_BG = "#121212"
 
-GREEN = ("#2e9e5b", "#2e9e5b")
-RED = ("#c94040", "#c94040")
-COL_INFO = ("gray30", "gray75")
-COL_OK = ("#1e7a45", "#4cc38a")
-COL_ERR = ("#b3261e", "#ff6b6b")
-COL_HINT = ("gray40", "gray60")
+# Apple-style palette (light, dark): soft tinted backdrop, frosted cards with a bright glass edge
+BG = ("#E8EDF4", "#0E1117")
+CARD = ("#F7F9FC", "#1A1F27")
+CARD_EDGE = ("#FFFFFF", "#2B323D")
+FIELD = ("#EBEFF5", "#252B35")
+FIELD_EDGE = ("#DCE2EA", "#323A46")
+FIELD_HOVER = ("#DFE5EE", "#2E3541")
+TEXT = ("#1C1C1E", "#F2F2F7")
+ACCENT = ("#007AFF", "#0A84FF")
+ACCENT_HOVER = ("#0062CC", "#3395FF")
+TINT = ("#DCEBFF", "#16263B")
+TINT_HOVER = ("#C9DFFF", "#1D3350")
+GREEN = ("#34C759", "#30D158")
+GREEN_HOVER = ("#2DB14F", "#28B84C")
+RED = ("#FF3B30", "#FF453A")
+RED_HOVER = ("#E0342A", "#E03C32")
+COL_INFO = ("#3A3A3C", "#D1D1D6")
+COL_OK = ("#248A3D", "#30D158")
+COL_ERR = ("#D70015", "#FF6961")
+COL_HINT = ("#8E8E93", "#8E8E93")
+
+UI_FONTS = (".AppleSystemUIFont", "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "Inter", "Cantarell", "Ubuntu")
+MONO_FONTS = ("SF Mono", "Menlo", "Cascadia Mono", "Consolas", "JetBrains Mono", "DejaVu Sans Mono")
+
+
+def resource(rel):
+    """Path to a bundled file (PyInstaller unpacks data files to sys._MEIPASS)."""
+    return os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), rel)
+
+
+def apply_theme():
+    """Restyles the CustomTkinter widgets in an Apple-like look. Call before creating the window."""
+    t = ctk.ThemeManager.theme
+    t["CTk"]["fg_color"] = BG
+    t["CTkToplevel"]["fg_color"] = BG
+    t["CTkFrame"].update(fg_color=CARD, top_fg_color=CARD, border_color=CARD_EDGE, border_width=1, corner_radius=18)
+    t["CTkButton"].update(fg_color=ACCENT, hover_color=ACCENT_HOVER, corner_radius=10,
+                          text_color=("#FFFFFF", "#FFFFFF"), text_color_disabled=("#AEAEB2", "#636366"))
+    t["CTkLabel"]["text_color"] = TEXT
+    t["CTkEntry"].update(fg_color=FIELD, border_color=FIELD_EDGE, border_width=1, corner_radius=10, text_color=TEXT)
+    t["CTkOptionMenu"].update(fg_color=FIELD, button_color=FIELD, button_hover_color=FIELD_HOVER,
+                              corner_radius=10, text_color=TEXT)
+    t["CTkSegmentedButton"].update(fg_color=FIELD, unselected_color=FIELD, unselected_hover_color=FIELD_HOVER,
+                                   selected_color=("#FFFFFF", "#48505E"), selected_hover_color=("#FFFFFF", "#525B6A"),
+                                   border_width=3, corner_radius=10, text_color=TEXT)
+    t["CTkSwitch"].update(fg_color=("#D9DDE3", "#39393D"), progress_color=GREEN, border_width=2,
+                          button_color=("#FFFFFF", "#FFFFFF"), button_hover_color=("#FFFFFF", "#FFFFFF"),
+                          text_color=TEXT)
+    t["CTkProgressBar"].update(fg_color=FIELD, progress_color=ACCENT)
+    t["CTkTextbox"].update(fg_color=FIELD, corner_radius=12, text_color=TEXT,
+                           scrollbar_button_color=FIELD_EDGE, scrollbar_button_hover_color=COL_HINT)
+    t["CTkScrollbar"].update(button_color=FIELD_EDGE, button_hover_color=COL_HINT)
+    t["DropdownMenu"].update(fg_color=CARD, hover_color=TINT, text_color=TEXT)
 
 
 def fmt_cmd(cmd):
@@ -142,8 +190,19 @@ class App(ctk.CTk):
     def __init__(self):
         ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("blue")
+        apply_theme()
         super().__init__()
+        families = set(tkfont.families(self))
+        ctk.ThemeManager.theme["CTkFont"]["family"] = next((f for f in UI_FONTS if f in families), "TkDefaultFont")
+        self.mono = next((f for f in MONO_FONTS if f in families), "TkFixedFont")
         self.title("Cam2MP4")
+        self._icon = None
+        try:
+            self._icon = Image.open(resource(os.path.join("assets", "cam2mp4-icon-256.png")))
+            self._icon_ph = ImageTk.PhotoImage(self._icon)
+            self.iconphoto(True, self._icon_ph)
+        except Exception:  # noqa: BLE001
+            pass
         self.geometry("1080x840")
         self.minsize(980, 720)
 
@@ -206,13 +265,20 @@ class App(ctk.CTk):
         ctk.set_appearance_mode({"Light": "light", "Dark": "dark", "Auto": "system"}[value])
 
     def _card(self, parent, title):
-        card = ctk.CTkFrame(parent, corner_radius=12)
-        card.pack(fill="x", pady=6)
-        ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=14, weight="bold"),
-                     anchor="w").pack(fill="x", padx=16, pady=(12, 4))
-        body = ctk.CTkFrame(card, fg_color="transparent")
-        body.pack(fill="x", padx=16, pady=(0, 14))
+        """Grouped section like in iOS/macOS settings: small caps heading above a frosted card."""
+        ctk.CTkLabel(parent, text=title.upper(), font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=COL_HINT, anchor="w").pack(fill="x", padx=14, pady=(12, 4))
+        card = ctk.CTkFrame(parent)
+        card.pack(fill="x", pady=(0, 4))
+        body = ctk.CTkFrame(card, fg_color="transparent", border_width=0)
+        body.pack(fill="x", padx=16, pady=14)
         return body
+
+    @staticmethod
+    def _tinted(parent, text, width, command, **kw):
+        """Secondary button: tinted accent background, accent text (Apple's 'tinted' style)."""
+        return ctk.CTkButton(parent, text=text, width=width, command=command, fg_color=TINT,
+                             hover_color=TINT_HOVER, text_color=ACCENT, **kw)
 
     @staticmethod
     def _lbl(parent, text, **kw):
@@ -225,24 +291,27 @@ class App(ctk.CTk):
         self.rowconfigure(1, weight=1)
 
         # Header
-        head = ctk.CTkFrame(self, fg_color="transparent")
+        head = ctk.CTkFrame(self, fg_color="transparent", border_width=0)
         head.grid(row=0, column=0, columnspan=2, sticky="ew", padx=22, pady=(18, 6))
-        head.columnconfigure(0, weight=1)
+        head.columnconfigure(1, weight=1)
+        if self._icon is not None:
+            ctk.CTkLabel(head, text="", image=ctk.CTkImage(self._icon, size=(52, 52))).grid(
+                row=0, column=0, rowspan=2, sticky="w", padx=(0, 14))
         ctk.CTkLabel(head, text="Cam2MP4", anchor="w",
-                     font=ctk.CTkFont(size=28, weight="bold")).grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(head, text="Keep your memories alive – digitize camcorder tapes straight to MP4", anchor="w",
-                     text_color=COL_HINT).grid(row=1, column=0, sticky="w")
+                     font=ctk.CTkFont(size=28, weight="bold")).grid(row=0, column=1, sticky="sw")
+        ctk.CTkLabel(head, text="Keep your memories alive", anchor="w",
+                     text_color=COL_HINT).grid(row=1, column=1, sticky="nw")
         self.theme_btn = ctk.CTkSegmentedButton(head, values=["Light", "Dark", "Auto"],
-                                                command=self._set_theme, width=180)
+                                                command=self._set_theme, width=200, height=32)
         self.theme_btn.set("Auto")
-        self.theme_btn.grid(row=0, column=1, rowspan=2, sticky="e")
+        self.theme_btn.grid(row=0, column=2, rowspan=2, sticky="e")
 
         # Left column: settings
-        left = ctk.CTkScrollableFrame(self, width=450, fg_color="transparent")
+        left = ctk.CTkScrollableFrame(self, width=450, fg_color="transparent", border_width=0)
         left.grid(row=1, column=0, sticky="nsew", padx=(16, 8), pady=(0, 16))
 
         self.mode_btn = ctk.CTkSegmentedButton(left, values=[MODE_CAP, MODE_FILE],
-                                               command=self._mode_changed, height=36)
+                                               command=self._mode_changed, height=38)
         self.mode_btn.set(MODE_CAP)
         self.mode_btn.pack(fill="x", pady=(0, 6))
 
@@ -250,7 +319,7 @@ class App(ctk.CTk):
         body = self._card(left, "Source")
         body.columnconfigure(0, weight=1)
 
-        self.cap_frame = ctk.CTkFrame(body, fg_color="transparent")
+        self.cap_frame = ctk.CTkFrame(body, fg_color="transparent", border_width=0)
         self.cap_frame.columnconfigure(1, weight=1)
         if SYSTEM == "Linux":
             self._lbl(self.cap_frame, "Format").grid(row=0, column=0, sticky="w", pady=4)
@@ -267,7 +336,7 @@ class App(ctk.CTk):
                                               command=lambda _v: self._restart_preview(),
                                               dynamic_resizing=False, values=[NO_DEVICE])
             self.om_video.grid(row=0, column=1, sticky="ew", padx=(10, 6), pady=4)
-            ctk.CTkButton(self.cap_frame, text="↻", width=36, command=self.refresh_devices).grid(row=0, column=2, pady=4)
+            self._tinted(self.cap_frame, "↻", 36, self.refresh_devices).grid(row=0, column=2, pady=4)
             self._lbl(self.cap_frame, "Audio").grid(row=1, column=0, sticky="w", pady=4)
             self.om_audio = ctk.CTkOptionMenu(self.cap_frame, variable=self.dev_audio,
                                               dynamic_resizing=False, values=[NO_AUDIO_DEV])
@@ -277,11 +346,10 @@ class App(ctk.CTk):
         self._lbl(self.cap_frame, hint, text_color=COL_HINT, wraplength=390,
                   justify="left").grid(row=hint_row, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
-        self.file_frame = ctk.CTkFrame(body, fg_color="transparent")
+        self.file_frame = ctk.CTkFrame(body, fg_color="transparent", border_width=0)
         self.file_frame.columnconfigure(0, weight=1)
         ctk.CTkEntry(self.file_frame, textvariable=self.src_file).grid(row=0, column=0, sticky="ew", pady=4)
-        ctk.CTkButton(self.file_frame, text="Browse …", width=110,
-                      command=self._pick_src).grid(row=0, column=1, padx=(8, 0), pady=4)
+        self._tinted(self.file_frame, "Browse …", 110, self._pick_src).grid(row=0, column=1, padx=(8, 0), pady=4)
         self._lbl(self.file_frame, "DV, AVI, MOV, M2T, MTS, MPG …", text_color=COL_HINT).grid(
             row=1, column=0, columnspan=2, sticky="w")
 
@@ -289,7 +357,7 @@ class App(ctk.CTk):
         body = self._card(left, "Output file (MP4)")
         body.columnconfigure(0, weight=1)
         ctk.CTkEntry(body, textvariable=self.outfile).grid(row=0, column=0, sticky="ew", pady=4)
-        ctk.CTkButton(body, text="Change …", width=90, command=self._pick_out).grid(row=0, column=1, padx=(8, 0), pady=4)
+        self._tinted(body, "Change …", 90, self._pick_out).grid(row=0, column=1, padx=(8, 0), pady=4)
 
         # Quality
         body = self._card(left, "Quality & options")
@@ -312,20 +380,20 @@ class App(ctk.CTk):
                   text_color=COL_HINT, wraplength=390, justify="left").grid(row=6, column=0, columnspan=2, sticky="w")
 
         # Right column: preview, status, controls, log
-        right = ctk.CTkFrame(self, fg_color="transparent")
+        right = ctk.CTkFrame(self, fg_color="transparent", border_width=0)
         right.grid(row=1, column=1, sticky="nsew", padx=(8, 22), pady=(0, 16))
         right.columnconfigure(0, weight=1)
         right.rowconfigure(4, weight=1)
         bold14 = ctk.CTkFont(size=14, weight="bold")
 
         # Preview
-        pv = ctk.CTkFrame(right, corner_radius=12)
+        pv = ctk.CTkFrame(right)
         pv.grid(row=0, column=0, sticky="ew", pady=6)
-        ph = ctk.CTkFrame(pv, fg_color="transparent")
+        ph = ctk.CTkFrame(pv, fg_color="transparent", border_width=0)
         ph.pack(fill="x", padx=16, pady=(10, 6))
         ph.columnconfigure(0, weight=1)
         ctk.CTkLabel(ph, text="Live preview", anchor="w", font=bold14).grid(row=0, column=0, sticky="w")
-        ctk.CTkButton(ph, text="↻", width=30, height=26, command=self._refresh_preview).grid(
+        self._tinted(ph, "↻", 30, self._refresh_preview, height=26).grid(
             row=0, column=1, sticky="e", padx=(0, 8))
         ctk.CTkSwitch(ph, text="", variable=self.show_preview, width=46,
                       command=self._restart_preview).grid(row=0, column=2, sticky="e")
@@ -337,49 +405,50 @@ class App(ctk.CTk):
         self.lbl_prev.pack(pady=(0, 14))
 
         # Status
-        sc = ctk.CTkFrame(right, corner_radius=12)
+        sc = ctk.CTkFrame(right)
         sc.grid(row=1, column=0, sticky="ew", pady=6)
-        self.lbl_timer = ctk.CTkLabel(sc, text="00:00:00", font=ctk.CTkFont(size=40, weight="bold"))
+        self.lbl_timer = ctk.CTkLabel(sc, text="00:00:00", font=ctk.CTkFont(size=44, weight="bold"))
         self.lbl_timer.pack(pady=(12, 0))
         self.lbl_size = ctk.CTkLabel(sc, text=" ", text_color=COL_HINT)
         self.lbl_size.pack()
-        self.pb = ctk.CTkProgressBar(sc)
+        self.pb = ctk.CTkProgressBar(sc, height=8)
         self.pb.set(0)
         self.pb.pack(fill="x", padx=24, pady=(8, 6))
         self.lbl_status = ctk.CTkLabel(sc, text="Ready.", text_color=COL_INFO, wraplength=440)
         self.lbl_status.pack(pady=(0, 12), padx=16)
 
         # Start / stop
-        bar = ctk.CTkFrame(right, fg_color="transparent")
+        bar = ctk.CTkFrame(right, fg_color="transparent", border_width=0)
         bar.grid(row=2, column=0, sticky="ew", pady=6)
         bar.columnconfigure((0, 1), weight=1, uniform="b")
-        self.btn_start = ctk.CTkButton(bar, text="", height=44, fg_color=GREEN, hover_color="#247a46",
-                                       font=ctk.CTkFont(size=15, weight="bold"), command=self.start)
+        self.btn_start = ctk.CTkButton(bar, text="", height=48, corner_radius=24, fg_color=GREEN,
+                                       hover_color=GREEN_HOVER, font=ctk.CTkFont(size=15, weight="bold"),
+                                       command=self.start)
         self.btn_start.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        self.btn_stop = ctk.CTkButton(bar, text="■  Stop", height=44, fg_color=RED, hover_color="#a03232",
-                                      font=ctk.CTkFont(size=15, weight="bold"), state="disabled", command=self.stop)
+        self.btn_stop = ctk.CTkButton(bar, text="■  Stop", height=48, corner_radius=24, fg_color=RED,
+                                      hover_color=RED_HOVER, font=ctk.CTkFont(size=15, weight="bold"),
+                                      state="disabled", command=self.stop)
         self.btn_stop.grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
         # Extra buttons
-        extras = ctk.CTkFrame(right, fg_color="transparent")
+        extras = ctk.CTkFrame(right, fg_color="transparent", border_width=0)
         extras.grid(row=3, column=0, sticky="ew")
-        self.btn_folder = ctk.CTkButton(extras, text="Open folder", width=110, state="disabled",
-                                        fg_color="transparent", border_width=1,
-                                        text_color=("gray10", "gray90"), command=self.open_folder)
+        self.btn_folder = self._tinted(extras, "Open folder", 120, self.open_folder, state="disabled",
+                                       text_color_disabled=COL_HINT)
         self.btn_folder.pack(side="left")
         if self.dvcont:
             for label, cmd in (("■", "stop"), ("▶", "play"), ("◀◀", "rewind")):
-                ctk.CTkButton(extras, text=label, width=44, command=lambda c=cmd: self.tape(c)).pack(side="right", padx=2)
+                self._tinted(extras, label, 44, lambda c=cmd: self.tape(c)).pack(side="right", padx=2)
             ctk.CTkLabel(extras, text="Tape:", text_color=COL_HINT).pack(side="right", padx=(0, 6))
 
         # Log
-        lg = ctk.CTkFrame(right, corner_radius=12)
+        lg = ctk.CTkFrame(right)
         lg.grid(row=4, column=0, sticky="nsew", pady=(6, 0))
         lg.columnconfigure(0, weight=1)
         lg.rowconfigure(1, weight=1)
         ctk.CTkLabel(lg, text="Log", anchor="w", font=bold14).grid(
             row=0, column=0, sticky="w", padx=16, pady=(10, 2))
-        self.txt = ctk.CTkTextbox(lg, wrap="word", height=80, font=ctk.CTkFont(family="Courier", size=12))
+        self.txt = ctk.CTkTextbox(lg, wrap="word", height=80, font=ctk.CTkFont(family=self.mono, size=12))
         self.txt.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
         self.txt.configure(state="disabled")
 
@@ -407,8 +476,11 @@ class App(ctk.CTk):
     def _update_buttons(self):
         busy = self.running and not self.preview_only   # recording/conversion running
         pending = self._after_idle is not None          # camera is being handed over
-        self.btn_start.configure(state="disabled" if (busy or pending) else "normal")
-        self.btn_stop.configure(state="normal" if busy else "disabled")
+        can_start = not (busy or pending)
+        # Disabled buttons fade to a neutral fill instead of keeping their full color
+        self.btn_start.configure(state="normal" if can_start else "disabled",
+                                 fg_color=GREEN if can_start else FIELD)
+        self.btn_stop.configure(state="normal" if busy else "disabled", fg_color=RED if busy else FIELD)
 
     def _show_placeholder(self, text="No preview"):
         self._video_on = False
