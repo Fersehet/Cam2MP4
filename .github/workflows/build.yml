@@ -64,6 +64,6 @@ jobs:
           ls -l dist
           # Creates the tag on the built commit if it doesn't exist yet
           # Screenshot on top of the notes; GitHub appends the list of changes below it
-          SHOT="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/raw/$GITHUB_SHA/docs/screenshots/converting-light.png"
+          SHOT="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/raw/$GITHUB_SHA/docs/screenshots/recording-light.png"
           gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "V${TAG#v}" --notes "![Cam2MP4]($SHOT)" --generate-notes
