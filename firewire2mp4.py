@@ -1100,6 +1100,8 @@ class App(ctk.CTk):
             self.q.put(("log", tr("Program not found: {e}", e=e)))
         except Exception as e:  # noqa: BLE001
             self.q.put(("log", tr("Error: {e}", e=e)))
+        if dv and dv.poll() is None:  # ffmpeg failed to start: don't keep the camera busy
+            dv.terminate()
         self.q.put(("done", (gen, rc)))
 
     def stop(self):
@@ -1116,10 +1118,11 @@ class App(ctk.CTk):
         except Exception:  # noqa: BLE001
             if self.ff and self.ff.poll() is None:
                 self.ff.terminate()
-        self.after(15000, self._force_kill)
+        self.after(15000, self._force_kill, self._gen)
 
-    def _force_kill(self):
-        if self.running and self.ff and self.ff.poll() is None:
+    def _force_kill(self, gen):
+        # only this run: by now the preview or a new recording may be running
+        if gen == self._gen and self.running and self.ff and self.ff.poll() is None:
             self.ff.terminate()
 
     def tape(self, command):
