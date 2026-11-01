@@ -70,6 +70,8 @@ def main():
            "--collect-all", "customtkinter", "--collect-all", "imageio_ffmpeg"]
     # Window icon inside the program, plus the file icon of the .exe/.app
     cmd += ["--add-data", f"assets/cam2mp4-icon-256.png{os.pathsep}assets"]
+    for mode in ("light", "dark"):
+        cmd += ["--add-data", f"assets/cam2mp4-wordmark-{mode}.png{os.pathsep}assets"]
     if SYSTEM == "Windows":
         cmd += ["--icon", "assets/cam2mp4.ico"]
     elif SYSTEM == "Darwin":
