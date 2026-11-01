@@ -221,7 +221,6 @@ TINT = ("#DCEBFF", "#16263B")
 TINT_HOVER = ("#C9DFFF", "#1D3350")
 GREEN = ("#34C759", "#30D158")
 GREEN_HOVER = ("#2DB14F", "#28B84C")
-LOGO_ORANGE = "#E8530C"  # the orange "2" of the logo
 RED = ("#FF3B30", "#FF453A")
 RED_HOVER = ("#E0342A", "#E03C32")
 COL_INFO = ("#3A3A3C", "#D1D1D6")
@@ -505,12 +504,14 @@ class App(ctk.CTk):
         if self._icon is not None:
             ctk.CTkLabel(head, text="", image=ctk.CTkImage(self._icon, size=(52, 52))).grid(
                 row=0, column=0, rowspan=2, sticky="w", padx=(0, 14))
-        # Wordmark like the logo: "Cam" "2" "MP4" with an orange "2"
-        word = ctk.CTkFrame(head, fg_color="transparent", border_width=0)
-        word.grid(row=0, column=1, sticky="sw")
-        title_font = ctk.CTkFont(size=28, weight="bold")
-        for text, color in (("Cam", TEXT), ("2", LOGO_ORANGE), ("MP4", TEXT)):
-            ctk.CTkLabel(word, text=text, font=title_font, text_color=color, width=0).pack(side="left")
+        try:  # wordmark from the logo, light and dark version
+            word = ctk.CTkImage(Image.open(resource(os.path.join("assets", "cam2mp4-wordmark-light.png"))),
+                                Image.open(resource(os.path.join("assets", "cam2mp4-wordmark-dark.png"))),
+                                size=(199, 30))
+            ctk.CTkLabel(head, text="", image=word).grid(row=0, column=1, sticky="sw", pady=(0, 4))
+        except Exception:  # noqa: BLE001
+            ctk.CTkLabel(head, text="Cam2MP4", anchor="w",
+                         font=ctk.CTkFont(size=28, weight="bold")).grid(row=0, column=1, sticky="sw")
         ctk.CTkLabel(head, text=tr("Keep your memories alive"), anchor="w",
                      text_color=COL_HINT).grid(row=1, column=1, sticky="nw")
         self.lang_btn = ctk.CTkSegmentedButton(head, values=list(LANGS), command=self._set_language,
