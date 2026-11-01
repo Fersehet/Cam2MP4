@@ -5,8 +5,7 @@ Cam2MP4 digitizes camcorder tapes over FireWire (DV/HDV) and converts video file
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/recording-light.png" alt="Recording a 1994 Christmas tape from a camcorder in light mode, with live preview" width="49%">
-  <img src="docs/screenshots/recording-dark.png" alt="The same recording in dark mode" width="49%">
+  <img src="docs/screenshots/recording-dark.png" alt="Recording a 1994 Christmas tape from a camcorder on Windows in dark mode, with live preview">
 </p>
 <p align="center"><em>Recording an old Christmas tape: live preview, elapsed time and file size while the MP4 is written.</em></p>
 
