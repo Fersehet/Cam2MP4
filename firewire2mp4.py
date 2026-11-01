@@ -204,7 +204,7 @@ QUALITY = {"High (CRF 18)": 18, "Good (CRF 21)": 21, "Compact (CRF 24)": 24}
 PRESET = {"Fast (larger file)": "veryfast", "Medium (recommended)": "medium", "Slow (smaller file)": "slow"}
 NO_AUDIO_DEV = "(in video stream / none)"
 NO_DEVICE = "(no device found)"
-PW, PH = 448, 252  # preview size (16:9)
+PW, PH = 1024, 576  # size of the preview frames from ffmpeg (16:9); shown scaled to fit
 PREVIEW_BG = "#121212"
 
 # Apple-style palette (light, dark): soft tinted backdrop, frosted cards with a bright glass edge
@@ -221,6 +221,7 @@ TINT = ("#DCEBFF", "#16263B")
 TINT_HOVER = ("#C9DFFF", "#1D3350")
 GREEN = ("#34C759", "#30D158")
 GREEN_HOVER = ("#2DB14F", "#28B84C")
+LOGO_ORANGE = "#E8530C"  # the orange "2" of the logo
 RED = ("#FF3B30", "#FF453A")
 RED_HOVER = ("#E0342A", "#E03C32")
 COL_INFO = ("#3A3A3C", "#D1D1D6")
@@ -351,6 +352,7 @@ class App(ctk.CTk):
             pass
         self.geometry("1080x840")
         self.minsize(980, 720)
+        self.after(0, self._maximize)  # after mainloop starts: CustomTkinter resets the state on Windows
 
         self.ffmpeg = find_ffmpeg()
         self.dvgrab = shutil.which("dvgrab") if SYSTEM == "Linux" else None
@@ -398,6 +400,13 @@ class App(ctk.CTk):
         self.after(250, self._startup_checks)
 
     # --------------------------------------------------------------- Helpers
+    def _maximize(self):
+        """Open maximized: the layout scales, and the log below the settings stays in view."""
+        try:
+            self.state("zoomed")              # Windows, macOS
+        except tk.TclError:
+            self.attributes("-zoomed", True)  # Linux (X11)
+
     def _default_output(self):
         base = os.path.join(os.path.expanduser("~"), "Videos")
         if not os.path.isdir(base):
@@ -496,8 +505,12 @@ class App(ctk.CTk):
         if self._icon is not None:
             ctk.CTkLabel(head, text="", image=ctk.CTkImage(self._icon, size=(52, 52))).grid(
                 row=0, column=0, rowspan=2, sticky="w", padx=(0, 14))
-        ctk.CTkLabel(head, text="Cam2MP4", anchor="w",
-                     font=ctk.CTkFont(size=28, weight="bold")).grid(row=0, column=1, sticky="sw")
+        # Wordmark like the logo: "Cam" "2" "MP4" with an orange "2"
+        word = ctk.CTkFrame(head, fg_color="transparent", border_width=0)
+        word.grid(row=0, column=1, sticky="sw")
+        title_font = ctk.CTkFont(size=28, weight="bold")
+        for text, color in (("Cam", TEXT), ("2", LOGO_ORANGE), ("MP4", TEXT)):
+            ctk.CTkLabel(word, text=text, font=title_font, text_color=color, width=0).pack(side="left")
         ctk.CTkLabel(head, text=tr("Keep your memories alive"), anchor="w",
                      text_color=COL_HINT).grid(row=1, column=1, sticky="nw")
         self.lang_btn = ctk.CTkSegmentedButton(head, values=list(LANGS), command=self._set_language,
@@ -561,6 +574,9 @@ class App(ctk.CTk):
         body.columnconfigure(0, weight=1)
         ctk.CTkEntry(body, textvariable=self.outfile).grid(row=0, column=0, sticky="ew", pady=4)
         self._tinted(body, tr("Change …"), 90, self._pick_out).grid(row=0, column=1, padx=(8, 0), pady=4)
+        self.btn_folder = self._tinted(body, tr("Open folder"), 120, self.open_folder, state="disabled",
+                                       text_color_disabled=COL_HINT)
+        self.btn_folder.grid(row=1, column=0, sticky="w", pady=4)
 
         # Quality
         body = self._card(left, tr("Quality & options"))
@@ -582,16 +598,22 @@ class App(ctk.CTk):
         self._lbl(body, tr("Auto stop 0 = off · \"Advanced\" = extra ffmpeg input options"),
                   text_color=COL_HINT, wraplength=390, justify="left").grid(row=6, column=0, columnspan=2, sticky="w")
 
-        # Right column: preview, status, controls, log
+        # Log (below the settings, so the right column is free for the preview)
+        body = self._card(left, tr("Log"))
+        self.txt = ctk.CTkTextbox(body, wrap="word", height=120, font=ctk.CTkFont(family=self.mono, size=12))
+        self.txt.pack(fill="x")
+        self.txt.configure(state="disabled")
+
+        # Right column: preview, status, controls
         right = ctk.CTkFrame(self, fg_color="transparent", border_width=0)
         right.grid(row=1, column=1, sticky="nsew", padx=(8, 22), pady=(0, 16))
         right.columnconfigure(0, weight=1)
-        right.rowconfigure(4, weight=1)
+        right.rowconfigure(0, weight=1)
         bold14 = ctk.CTkFont(size=14, weight="bold")
 
         # Preview
         pv = ctk.CTkFrame(right)
-        pv.grid(row=0, column=0, sticky="ew", pady=6)
+        pv.grid(row=0, column=0, sticky="nsew", pady=6)
         ph = ctk.CTkFrame(pv, fg_color="transparent", border_width=0)
         ph.pack(fill="x", padx=16, pady=(10, 6))
         ph.columnconfigure(0, weight=1)
@@ -601,11 +623,16 @@ class App(ctk.CTk):
         ctk.CTkSwitch(ph, text="", variable=self.show_preview, width=46,
                       command=self._restart_preview).grid(row=0, column=2, sticky="e")
         # Plain tk.Label + reused PhotoImage: much smoother than one CTkImage per frame
-        self._blank_ph = ImageTk.PhotoImage(Image.new("RGB", (PW, PH), (18, 18, 18)))
-        self._video_ph = ImageTk.PhotoImage(Image.new("RGB", (PW, PH), (18, 18, 18)))
-        self.lbl_prev = tk.Label(pv, image=self._blank_ph, text=tr("No preview"), compound="center",
+        # The preview grows with the window: it fills its area in 16:9, the images follow its size
+        area = ctk.CTkFrame(pv, fg_color="transparent", border_width=0, height=252)
+        area.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+        self._pv_size = (448, 252)
+        self._blank_ph = ImageTk.PhotoImage(Image.new("RGB", self._pv_size, (18, 18, 18)))
+        self._video_ph = ImageTk.PhotoImage(Image.new("RGB", self._pv_size, (18, 18, 18)))
+        self.lbl_prev = tk.Label(area, image=self._blank_ph, text=tr("No preview"), compound="center",
                                  bg=PREVIEW_BG, fg="#9a9a9a", bd=0, highlightthickness=0)
-        self.lbl_prev.pack(pady=(0, 14))
+        self.lbl_prev.place(relx=0.5, rely=0.5, anchor="center")
+        area.bind("<Configure>", self._fit_preview)
 
         # Status
         sc = ctk.CTkFrame(right)
@@ -633,27 +660,13 @@ class App(ctk.CTk):
                                       state="disabled", command=self.stop)
         self.btn_stop.grid(row=0, column=1, sticky="ew", padx=(6, 0))
 
-        # Extra buttons
-        extras = ctk.CTkFrame(right, fg_color="transparent", border_width=0)
-        extras.grid(row=3, column=0, sticky="ew")
-        self.btn_folder = self._tinted(extras, tr("Open folder"), 120, self.open_folder, state="disabled",
-                                       text_color_disabled=COL_HINT)
-        self.btn_folder.pack(side="left")
+        # Tape buttons (Linux with dvcont)
         if self.dvcont:
+            extras = ctk.CTkFrame(right, fg_color="transparent", border_width=0)
+            extras.grid(row=3, column=0, sticky="ew")
             for label, cmd in (("■", "stop"), ("▶", "play"), ("◀◀", "rewind")):
                 self._tinted(extras, label, 44, lambda c=cmd: self.tape(c)).pack(side="right", padx=2)
             ctk.CTkLabel(extras, text=tr("Tape:"), text_color=COL_HINT).pack(side="right", padx=(0, 6))
-
-        # Log
-        lg = ctk.CTkFrame(right)
-        lg.grid(row=4, column=0, sticky="nsew", pady=(6, 0))
-        lg.columnconfigure(0, weight=1)
-        lg.rowconfigure(1, weight=1)
-        ctk.CTkLabel(lg, text=tr("Log"), anchor="w", font=bold14).grid(
-            row=0, column=0, sticky="w", padx=16, pady=(10, 2))
-        self.txt = ctk.CTkTextbox(lg, wrap="word", height=80, font=ctk.CTkFont(family=self.mono, size=12))
-        self.txt.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
-        self.txt.configure(state="disabled")
 
     # ------------------------------------------------------- Status & dialogs
     def _log(self, msg):
@@ -696,6 +709,18 @@ class App(ctk.CTk):
             return tr("Preview is turned off")
         return tr("No preview")
 
+    def _fit_preview(self, event):
+        """Largest 16:9 size that fits the preview area; new images only when the size changes."""
+        w = max(16, min(event.width, event.height * 16 // 9))
+        size = (w, w * 9 // 16)
+        if size == self._pv_size:
+            return
+        self._pv_size = size
+        self._blank_ph = ImageTk.PhotoImage(Image.new("RGB", size, (18, 18, 18)))
+        self._video_ph = ImageTk.PhotoImage(Image.new("RGB", size, (18, 18, 18)))
+        self._shown = None  # redraw the current frame at the new size
+        self.lbl_prev.configure(image=self._video_ph if self._video_on else self._blank_ph)
+
     def _preview_tick(self):
         """Draws the newest preview frame (checked up to ~60 times per second)."""
         data = self._frame
@@ -703,9 +728,10 @@ class App(ctk.CTk):
             self._shown = data
             try:
                 img = Image.open(io.BytesIO(data))
+                img.draft("RGB", self._pv_size)  # let the JPEG decoder downscale cheaply when possible
                 img.load()
-                if img.size != (PW, PH):
-                    img = img.resize((PW, PH))
+                if img.size != self._pv_size:
+                    img = img.resize(self._pv_size)
                 self._video_ph.paste(img)  # reuse the same image object → no flicker
                 if not self._video_on:
                     self._video_on = True
@@ -878,7 +904,7 @@ class App(ctk.CTk):
         return []
 
     def _preview_args(self):
-        """Second ffmpeg output: small MJPEG frames via stdout (preview only).
+        """Second ffmpeg output: MJPEG frames via stdout (preview only).
         Camcorder: full frame rate (25/30 fps) for smooth video. File: 8 fps is enough."""
         vf = [] if self._is_capture() else ["fps=8"]
         if self.deint.get():
