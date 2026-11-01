@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/cam2mp4-logo.png" alt="Cam2MP4 – Keep your memories alive" width="520"></p>
+<p align="center"><img src="assets/cam2mp4-logo-animated.svg" alt="Cam2MP4 – Keep your memories alive" width="520"></p>
 
 Cam2MP4 digitizes camcorder tapes over FireWire (DV/HDV) and converts video files straight to MP4, with a live preview.
 
