@@ -11,8 +11,6 @@ Installation:
 
 Start:
     python3 firewire2mp4.py
-
-Without extra packages, the plain variant firewire2mp4_classic.py runs.
 """
 
 import io
@@ -47,8 +45,7 @@ if _missing:
     _hint = ("\n\nOn Linux also:  sudo apt install python3-pil.imagetk"
              if platform.system() == "Linux" and "pillow" in _missing else "")
     messagebox.showerror("Python package missing",
-                         "Please install first:\n\n    pip install " + " ".join(_missing) + _hint + "\n\n"
-                         "Alternatively: firewire2mp4_classic.py (no extra packages).")
+                         "Please install first:\n\n    pip install " + " ".join(_missing) + _hint)
     raise SystemExit(1)
 
 SYSTEM = platform.system()  # "Windows", "Darwin" or "Linux"
@@ -376,6 +373,8 @@ class App(ctk.CTk):
         self._frame = None
         self._shown = None
         self._video_on = False
+        self._killed = False           # stop timed out and ffmpeg had to be terminated
+        self._closing = False          # close the window once the recording is finalized
 
         self.src_file = tk.StringVar()
         self.dev_video = tk.StringVar(value=tr(NO_DEVICE))
@@ -443,6 +442,7 @@ class App(ctk.CTk):
         status = self.lbl_status.cget("text") if self._hold_status else None
         status_color = self.lbl_status.cget("text_color")
         folder_state = self.btn_folder.cget("state")
+        timer, size, progress = self.lbl_timer.cget("text"), self.lbl_size.cget("text"), self.pb.get()
 
         LANG = LANGS[value]
         save_config(lang=LANG)
@@ -460,6 +460,9 @@ class App(ctk.CTk):
         self.theme_btn.set(tr(theme) if theme != "Auto" else "Auto")
         self.mode_btn.set(tr(MODE_CAP if capture else MODE_FILE))
         self.btn_folder.configure(state=folder_state)
+        self.lbl_timer.configure(text=timer)
+        self.lbl_size.configure(text=size)
+        self.pb.set(progress)
         if SYSTEM != "Linux":
             self.om_video.configure(values=list(self.video_map) or [tr(NO_DEVICE)])
             self.om_audio.configure(values=[tr(NO_AUDIO_DEV)] + list(self.audio_map))
@@ -468,7 +471,7 @@ class App(ctk.CTk):
         if status:
             self.lbl_status.configure(text=status, text_color=status_color)
         else:
-            self._set_status(tr(tr("Ready.")))
+            self._set_status(tr("Ready."))
         self._mode_changed()
 
     def _card(self, parent, title):
@@ -793,7 +796,8 @@ class App(ctk.CTk):
         if p:
             self.src_file.set(p)
             if os.path.basename(self.outfile.get()).startswith("Camcorder_"):
-                self.outfile.set(os.path.splitext(p)[0] + ".mp4")
+                base, ext = os.path.splitext(p)  # an MP4 input must not get itself as the output
+                self.outfile.set(base + ("_converted" if ext.lower() == ".mp4" else "") + ".mp4")
 
     def _pick_out(self):
         p = filedialog.asksaveasfilename(title=tr("Save MP4 as"), defaultextension=".mp4",
@@ -1051,6 +1055,7 @@ class App(ctk.CTk):
         self.use_preview = use_preview
         self.current_out = out or ""
         self.running, self.stopping = True, False
+        self._killed = False
         self.total_secs = None
         self._frame = self._shown = None
         self._last_dv = None
@@ -1146,11 +1151,12 @@ class App(ctk.CTk):
         except Exception:  # noqa: BLE001
             if self.ff and self.ff.poll() is None:
                 self.ff.terminate()
-        self.after(15000, self._force_kill, self._gen)
+        self.after(300000, self._force_kill, self._gen)  # finalizing a long recording can take minutes
 
     def _force_kill(self, gen):
         # only this run: by now the preview or a new recording may be running
         if gen == self._gen and self.running and self.ff and self.ff.poll() is None:
+            self._killed = True  # the file was not finalized
             self.ff.terminate()
 
     def tape(self, command):
@@ -1218,6 +1224,9 @@ class App(ctk.CTk):
         self.dv = self.ff = None
         self._frame = None
         cb, self._after_idle = self._after_idle, None
+        if self._closing:  # quit was confirmed during a recording: it is finalized now
+            self.after(0, self.destroy)
+            return
 
         if was_preview:
             if cb:  # camera is handed to the recording, or the preview restarts
@@ -1240,7 +1249,7 @@ class App(ctk.CTk):
         self._show_placeholder(self._idle_text())
         self._hold_status = True
         have_file = os.path.isfile(self.current_out) and os.path.getsize(self.current_out) > 0
-        if have_file and (rc == 0 or self.stopping):
+        if have_file and (rc == 0 or self.stopping) and not self._killed:
             mb = os.path.getsize(self.current_out) / 1e6
             self._pb_determinate(1)
             self._set_status(tr("Done: {name} ({mb:.1f} MB)", name=os.path.basename(self.current_out), mb=mb), "ok")
@@ -1255,8 +1264,12 @@ class App(ctk.CTk):
         self._sync_preview()  # resume the live preview
 
     def _on_close(self):
-        if self.running and not self.preview_only:
+        if self.running and not self.preview_only and not self._closing:
             if not messagebox.askyesno(tr("Quit"), tr("A recording/conversion is still running. Really quit?")):
+                return
+            if self.running and not self.preview_only:  # it may have finished while the dialog was open
+                self._closing = True  # stop like the stop button; _finished then closes the window
+                self.stop()
                 return
         for p in (self.dv, self.ff):
             try:
