@@ -10,7 +10,7 @@ Installation:
     + Linux: dvgrab (recommended), optionally dvcont for tape control
 
 Start:
-    python3 firewire2mp4.py
+    python3 cam2mp4.py
 """
 
 import io
@@ -1282,7 +1282,7 @@ class App(ctk.CTk):
 
 def selftest(result_path):
     """Checks without a window whether a usable ffmpeg (with libx264 and AAC) is found.
-    Usage:  FireWire2MP4 --selftest result.txt   (used by the build script)"""
+    Usage:  Cam2MP4 --selftest result.txt   (used by the build script)"""
     lines, ok = [], False
     exe = find_ffmpeg()
     lines.append(f"ffmpeg: {exe}")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Builds FireWire2MP4 as a standalone program (ffmpeg is bundled).
+Builds Cam2MP4 as a standalone program (ffmpeg is bundled).
 
     python build.py
 
@@ -10,9 +10,9 @@ PyInstaller cannot cross-compile: build the Windows program on Windows,
 the macOS program on macOS, the Linux program on Linux (or all of them via GitHub Actions).
 
 Output in the folder  release/ :
-    Windows  FireWire2MP4.exe
-    macOS    FireWire2MP4-macos-<arch>.zip   (contains FireWire2MP4.app)
-    Linux    FireWire2MP4-linux-<arch>.tar.gz
+    Windows  Cam2MP4.exe
+    macOS    Cam2MP4-macos-<arch>.zip   (contains Cam2MP4.app)
+    Linux    Cam2MP4-linux-<arch>.tar.gz
 """
 import os
 import platform
@@ -24,7 +24,7 @@ import venv
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-NAME = "FireWire2MP4"
+NAME = "Cam2MP4"
 SYSTEM = platform.system()  # Windows, Darwin, Linux
 ARCH = platform.machine().lower().replace("amd64", "x64").replace("x86_64", "x64")
 ENV = HERE / ".buildenv"
@@ -78,7 +78,7 @@ def main():
         cmd += ["--icon", "assets/cam2mp4-icon-1024.png"]  # PyInstaller converts it to .icns via Pillow
     if SYSTEM != "Darwin":  # on macOS an .app folder is the usual way
         cmd.append("--onefile")
-    run(cmd + ["firewire2mp4.py"])
+    run(cmd + ["cam2mp4.py"])
 
     dist = HERE / "dist"
     if SYSTEM == "Windows":
@@ -90,8 +90,8 @@ def main():
         app = dist / f"{NAME}.app"
         plist = app / "Contents" / "Info.plist"
         # Without these texts macOS cannot grant the program camera/microphone access
-        for key, text in (("NSCameraUsageDescription", "FireWire2MP4 reads the video signal from the camcorder."),
-                          ("NSMicrophoneUsageDescription", "FireWire2MP4 reads the audio from the camcorder.")):
+        for key, text in (("NSCameraUsageDescription", "Cam2MP4 reads the video signal from the camcorder."),
+                          ("NSMicrophoneUsageDescription", "Cam2MP4 reads the audio from the camcorder.")):
             run(["plutil", "-replace", key, "-string", text, plist])
         run(["codesign", "--force", "--deep", "--sign", "-", app])  # ad-hoc signature after the change
         selftest(app / "Contents" / "MacOS" / NAME)
