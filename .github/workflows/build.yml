@@ -10,7 +10,7 @@ on:
     branches: ["**"]
     tags: ["v*"]   # a version tag (e.g. v1.0.1) builds and publishes a GitHub release
     paths:
-      - firewire2mp4.py
+      - cam2mp4.py
       - build.py
       - .github/workflows/build.yml
       - assets/**
@@ -39,7 +39,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: FireWire2MP4-${{ runner.os }}
+          name: Cam2MP4-${{ runner.os }}
           path: release/*
           if-no-files-found: error
 
